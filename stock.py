@@ -8,22 +8,18 @@ import numpy as np
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.metrics import Accuracy
 
 import matplotlib.pyplot as plt
 
 # Load data
 start = '01/06/2009'
 end = dt.datetime.now().strftime("%d/%m/%Y")
-test_size = 60
-pre_day = 30
-company = 'PLC'
-crypto = 'bitcoin'
-df = investpy.get_stock_historical_data(stock=company, country='VietNam', from_date=start, to_date=end)
-# df = investpy.get_crypto_historical_data(crypto=crypto, from_date=start, to_date=end)
+
+company = 'FB'
+df = investpy.get_stock_historical_data(stock=company, country='United States', from_date=start, to_date=end)
 
 df = pd.DataFrame(df)
+print(df)
 
 df['H-L'] = df['High'] - df['Low']
 df['O-C'] = df['Open'] - df['Close']
@@ -33,16 +29,18 @@ ma_3 = 21
 df[f'SMA_{ma_1}'] = df['Close'].rolling(window=ma_1).mean()
 df[f'SMA_{ma_2}'] = df['Close'].rolling(window=ma_2).mean()
 df[f'SMA_{ma_3}'] = df['Close'].rolling(window=ma_3).mean()
-df[f'SD_{ma_1}'] = (((df['Close'] - df[f'SMA_{ma_1}'])**2).rolling(window=ma_1).sum()/ma_1)**.5
+
+df[f'SD_{ma_1}'] = df['Close'].rolling(window=ma_1).std()
+df[f'SD_{ma_3}'] = df['Close'].rolling(window=ma_3).std()
 df.dropna(inplace=True)
 
 df.to_csv(f"{company}.csv")
-# df.to_csv(f"{crypto}.csv")
 print("Done Loading Data")
 # Process Data
+pre_day = 30
 scala_x = MinMaxScaler(feature_range=(0, 1))
 scala_y = MinMaxScaler(feature_range=(0, 1))
-cols_x = ['H-L', 'O-C', f'SMA_{ma_1}', f'SMA_{ma_2}', f'SMA_{ma_3}', f'SD_{ma_1}']
+cols_x = ['H-L', 'O-C', f'SMA_{ma_1}', f'SMA_{ma_2}', f'SMA_{ma_3}', f'SD_{ma_1}', f'SD_{ma_3}']
 cols_y = ['Close']
 scaled_data_x = scala_x.fit_transform(df[cols_x].values.reshape(-1, len(cols_x)))
 scaled_data_y = scala_y.fit_transform(df[cols_y].values.reshape(-1, len(cols_y)))
@@ -53,6 +51,8 @@ y_total = []
 for i in range(pre_day, len(df)):
     x_total.append(scaled_data_x[i-pre_day:i])
     y_total.append(scaled_data_y[i])
+
+test_size = 365
 
 x_train = np.array(x_total[:len(x_total)-test_size])
 x_test = np.array(x_total[len(x_total)-test_size:])
@@ -75,8 +75,8 @@ model.add(Dropout(0.2))
 model.add(LSTM(units=60))
 model.add(Dropout(0.2))
 model.add(Dense(units=len(cols_y)))
-adam = Adam(lr=0.005)
-model.compile(optimizer=adam, loss='mean_squared_error')
+
+model.compile(optimizer='adam', loss='mean_squared_error')
 model.fit(x_train, y_train, epochs=120, steps_per_epoch=40, use_multiprocessing=True)
 model.save(f"{company}.h5")
 print("Done Training Model")
@@ -92,10 +92,7 @@ real_price = real_price.reshape(real_price.shape[0], 1)
 
 plt.plot(real_price, color="red", label=f"Real {company} Prices")
 plt.plot(predict_prices, color="blue", label=f"Predicted {company} Prices")
-# plt.plot(real_price, color="red", label=f"Real {crypto} Prices")
-# plt.plot(predict_prices, color="blue", label=f"Predicted {crypto} Prices")
 plt.title(f"{company} Prices")
-# plt.title(f"{crypto} Prices")
 plt.xlabel("Time")
 plt.ylabel("Stock Prices")
 plt.ylim(bottom=0)
